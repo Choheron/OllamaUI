@@ -7,7 +7,7 @@ from utils.ollama_utils import get_installed_models
 from components.chat_box import ChatBox
 
 
-class OllamaUI(App):
+class OllamaTermUI(App):
   '''A Textual App to manage and interact with Ollama APIs'''
   TITLE = "Ollama-UI"
   BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
