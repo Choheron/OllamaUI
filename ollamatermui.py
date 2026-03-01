@@ -219,5 +219,5 @@ class OllamaTermUI(App):
 
 
 if __name__ == "__main__":
-  app = OllamaUI()
+  app = OllamaTermUI()
   app.run()
