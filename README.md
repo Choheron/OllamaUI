@@ -2,17 +2,17 @@
 
 # OllamaTermUI
 
-A terminal-based chat interface for [Ollama](https://ollama.com), built with [Textual](https://textual.textualize.io). Run multiple conversations simultaneously, switch between models on the fly, and get streaming responses with real-time markdown rendering — all without leaving the terminal.
+A terminal-based chat interface for [Ollama](https://ollama.com), built with [Textual](https://textual.textualize.io). Run multiple conversations simultaneously, switch between models on the fly, and get streaming responses with real-time markdown rendering -> all without leaving the terminal.
 
 ---
 
 ## Features
 
-- **Conversation Management Sidebar** — Have several conversations at once, each independently tracked with its own model and history
-- **Model switching** — Change the active model mid-session from the top dropdown. Doing this causes the conversation to either carry or start fresh depending on persistence toggle state.
-- **Conversation persistence toggle** — Decide whether message history follows you when you switch models
-- **Streaming responses** — Responses stream in token by token with live markdown rendering.
-- **Server info** — Click the `ℹ` button to see your server address, connection status, active model details, and a full list of installed models
+- **Conversation Management Sidebar** -> Have several conversations at once, each independently tracked with its own model and history
+- **Model switching** -> Change the active model mid-session from the top dropdown. Doing this causes the conversation to either carry or start fresh depending on persistence toggle state.
+- **Conversation persistence toggle** -> Decide whether message history follows you when you switch models
+- **Streaming responses** -> Responses stream in token by token with live markdown rendering.
+- **Server info** -> Click the `ℹ` button to see your server address, connection status, active model details, and a full list of installed models
 
 ---
 
@@ -54,7 +54,7 @@ pip install -r requirements.txt
 python ollamatermui.py
 ```
 
-The app will connect to your Ollama server on startup and populate the model list automatically. If the server is unreachable, it will fail at this step — make sure Ollama is running and the URL is correct.
+The app will connect to your Ollama server on startup and populate the model list automatically. If the server is unreachable, it will fail at this step -> make sure Ollama is running and the URL is correct.
 
 ---
 
@@ -62,9 +62,9 @@ The app will connect to your Ollama server on startup and populate the model lis
 
 ### Managing Conversations
 
-- **New Conversation** — opens a fresh chat using whichever model is currently selected in the dropdown
-- **Conversation list** — click any conversation in the sidebar to switch to it; your current messages are saved automatically
-- **Delete Conversation** — click the red **Delete Conversation** button inside the chat; a confirmation dialog will appear before anything is removed
+- **New Conversation** -> Opens a fresh chat using whichever model is currently selected in the dropdown.
+- **Conversation list** -> Click any conversation in the sidebar to switch to it, your current messages are saved automatically.
+- **Delete Conversation** -> Click the red **Delete Conversation** button inside the chat, confirmation required.
 
 ### Model Switching
 
@@ -91,5 +91,5 @@ Click the `ℹ` button in the top-right of the status bar to open the server inf
 
 ## Built With
 
-- [Textual](https://textual.textualize.io) — terminal UI framework for Python
-- [Ollama](https://ollama.com) — local LLM inference server
+- [Textual](https://textual.textualize.io) -> terminal UI framework for Python
+- [Ollama](https://ollama.com) -> local LLM inference server
