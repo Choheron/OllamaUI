@@ -1,9 +1,11 @@
 import requests
 import json
 
+OLLAMA_BASE_URL = "http://192.168.1.200:11434"
+
 def get_installed_models():
   # Query server for models
-  response = requests.get("http://192.168.1.200:11434/api/tags")
+  response = requests.get(f"{OLLAMA_BASE_URL}/api/tags")
   modelList = response.json()['models']
   return modelList
 
@@ -17,7 +19,7 @@ def get_response(model: str, prompt: str):
     "stream": False
   }
   # Query Backend
-  response = requests.post("http://192.168.1.200:11434/api/generate", json=reqBody)
+  response = requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=reqBody)
   modelResponse =  response.json()['response']
   return modelResponse
 
@@ -31,7 +33,7 @@ def get_converstaion_response(model: str, conversation: list[dict]):
     "stream": False
   }
   # Query Backend
-  response = requests.post("http://192.168.1.200:11434/api/chat", json=reqBody)
+  response = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=reqBody)
   resData =  response.json()
   return resData
 
@@ -43,7 +45,7 @@ def stream_conversation_response(model: str, conversation: list[dict]):
     "messages": conversation,
     "stream": True
   }
-  response = requests.post("http://192.168.1.200:11434/api/chat", json=reqBody, stream=True)
+  response = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=reqBody, stream=True)
   for line in response.iter_lines():
     if line:
       yield json.loads(line)

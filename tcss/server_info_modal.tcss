@@ -1,0 +1,29 @@
+ServerInfoModal {
+  align: center middle;
+}
+
+#serverInfoDialog {
+  width: 65;
+  height: auto;
+  max-height: 80%;
+  padding: 1 2;
+  border: thick $primary;
+  background: $surface;
+  overflow-y: auto;
+}
+
+#serverInfoDialog .sectionHeader {
+  color: $accent;
+  text-style: bold;
+  margin-top: 1;
+}
+
+#serverInfoDialog DataTable {
+  height: auto;
+  max-height: 10;
+}
+
+#serverInfoDialog #button_closeServerInfo {
+  width: 100%;
+  margin-top: 1;
+}

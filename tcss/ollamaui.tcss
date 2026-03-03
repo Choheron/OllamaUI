@@ -6,7 +6,12 @@
 }
 
 #modelSelect {
-  width: 100%;
+  width: 1fr;
+}
+
+#button_serverInfo {
+  width: 1;
+  margin-left: 1;
 }
 
 #sidebar {

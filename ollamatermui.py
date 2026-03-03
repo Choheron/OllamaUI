@@ -3,8 +3,9 @@ from textual.widgets import Footer, Header, Label, Button, Select, ListView, Lis
 from textual.containers import Horizontal, Vertical
 from textual import work
 
-from utils.ollama_utils import get_installed_models
+from utils.ollama_utils import get_installed_models, OLLAMA_BASE_URL
 from components.chat_box import ChatBox
+from components.server_info_modal import ServerInfoModal
 
 
 class OllamaTermUI(App):
@@ -15,6 +16,7 @@ class OllamaTermUI(App):
     "tcss/chat_box.tcss",
     "tcss/confirm_clear_modal.tcss",
     "tcss/ollamaui.tcss",
+    "tcss/server_info_modal.tcss",
   ]
 
 
@@ -22,6 +24,7 @@ class OllamaTermUI(App):
     yield Header()
     with Horizontal(id="statusBar"):
       yield Select([("Loading...", 1)], id="modelSelect", prompt="Loading models...", allow_blank=False)
+      yield Button("\u2139", id="button_serverInfo")
     with Horizontal():
       with Vertical(id="sidebar"):
         yield Label("Conversations:")
@@ -121,7 +124,14 @@ class OllamaTermUI(App):
 
 
   def on_button_pressed(self, event: Button.Pressed) -> None:
-    if event.button.id == "button_convoPersist":
+    if event.button.id == "button_serverInfo":
+      active_model = None
+      if self.active_convo_id is not None:
+        convo = self._get_conversation(self.active_convo_id)
+        if convo:
+          active_model = convo['model']
+      self.push_screen(ServerInfoModal(OLLAMA_BASE_URL, self.installed_models, active_model))
+    elif event.button.id == "button_convoPersist":
       self.carryOver = not self.carryOver
       btn = self.query_one("#button_convoPersist", Button)
       if self.carryOver:
