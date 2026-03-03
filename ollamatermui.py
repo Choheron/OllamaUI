@@ -28,10 +28,11 @@ class OllamaTermUI(App):
 
   def compose(self) -> ComposeResult:
     yield Header()
-    with Horizontal(id="statusBar"):
+    with Horizontal(id="topBar"):
       yield Button("\u2699 ", id="button_settings")
-      yield Button("\u2139 ", id="button_serverInfo")
-      yield Select([("Loading...", 1)], id="modelSelect", prompt="Loading models...", allow_blank=False)
+      with Horizontal(id="statusBar"):
+        yield Button("\u2139 ", id="button_serverInfo")
+        yield Select([("Loading...", 1)], id="modelSelect", prompt="Loading models...", allow_blank=False)
     with Horizontal():
       with Vertical(id="sidebar"):
         yield Label("Conversations:")

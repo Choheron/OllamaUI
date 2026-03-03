@@ -1,7 +1,12 @@
-#statusBar {
+#topBar {
   height: 7;
   padding: 1;
   dock: top;
+}
+
+#statusBar {
+  height: 1fr;
+  width: 1fr;
   border: ascii blue;
 }
 
@@ -19,8 +24,9 @@
 #button_settings {
   width: auto;
   min-width: 0;
+  height: 100%;
   padding: 0 2;
-  margin-left: 1;
+  margin-right: 1;
 }
 
 #sidebar {
