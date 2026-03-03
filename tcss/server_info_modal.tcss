@@ -23,7 +23,46 @@ ServerInfoModal {
   max-height: 10;
 }
 
+#serverInfoDialog #button_deleteModel {
+  width: 100%;
+  margin-top: 1;
+}
+
+#serverInfoDialog #deleteStatusLabel {
+  width: 1fr;
+  content-align: center middle;
+  margin-top: 1;
+}
+
 #serverInfoDialog #button_closeServerInfo {
   width: 100%;
   margin-top: 1;
+}
+
+ConfirmDeleteModal {
+  align: center middle;
+}
+
+#confirmDeleteDialog {
+  width: 50;
+  height: auto;
+  padding: 1 2;
+  border: thick $error;
+  background: $surface;
+}
+
+#confirmDeleteDialog Label {
+  width: 1fr;
+  content-align: center middle;
+  padding-bottom: 1;
+}
+
+#confirmDeleteDialog .confirmDeleteHint {
+  color: $text-muted;
+}
+
+#confirmDeleteButtons {
+  width: 1fr;
+  height: auto;
+  align-horizontal: center;
 }

@@ -1,0 +1,33 @@
+SettingsModal {
+  align: center middle;
+}
+
+#settingsDialog {
+  width: 65;
+  height: auto;
+  padding: 1 2;
+  border: thick $warning;
+  background: $surface;
+}
+
+#settingsDialog .sectionHeader {
+  color: $accent;
+  text-style: bold;
+  margin-top: 1;
+}
+
+#settingsDialog .settingsHint {
+  color: $text-muted;
+  margin-bottom: 1;
+}
+
+#systemPromptInput {
+  height: 8;
+}
+
+#settingsButtons {
+  width: 1fr;
+  height: auto;
+  align-horizontal: center;
+  margin-top: 1;
+}

@@ -89,6 +89,11 @@ class ChatBox(Widget):
       self.convoViewport.scroll_end(animate=False)
 
 
+  def _scroll_if_at_bottom(self):
+    if self.convoViewport.scroll_y >= self.convoViewport.max_scroll_y - 3:
+      self.convoViewport.scroll_end(animate=False)
+
+
   def _handle_send(self):
     userText = self.inputBox.text
     if not userText:
@@ -140,11 +145,12 @@ class ChatBox(Widget):
       response_widget.border_title = "Thinking..."
       self.app.call_from_thread(self.convoViewport.mount, response_widget)
       accumulated = ""
-      for chunk in stream_conversation_response(self.model['name'], self.conversation):
+      system_prompt = getattr(self.app, 'system_prompt', '')
+      for chunk in stream_conversation_response(self.model['name'], self.conversation, system_prompt):
         if not chunk.get("done", False):
           accumulated += chunk["message"]["content"]
           self.app.call_from_thread(response_widget.update, accumulated)
-          self.app.call_from_thread(self.convoViewport.scroll_end, animate=False)
+          self.app.call_from_thread(self._scroll_if_at_bottom)
       self.conversation.append({"role": "assistant", "content": accumulated})
     except Exception as e:
       if response_widget is not None:

@@ -38,11 +38,21 @@ def get_converstaion_response(model: str, conversation: list[dict]):
   return resData
 
 
-def stream_conversation_response(model: str, conversation: list[dict]):
+def delete_model(model_name: str) -> bool:
+  """Delete a model from the Ollama server. Returns True on success."""
+  try:
+    response = requests.delete(f"{OLLAMA_BASE_URL}/api/delete", json={"name": model_name}, timeout=30)
+    return response.status_code == 200
+  except Exception:
+    return False
+
+
+def stream_conversation_response(model: str, conversation: list[dict], system_prompt: str = ""):
   """Query the passed in model for a streaming response. Yields parsed response chunks until done."""
+  messages = ([{"role": "system", "content": system_prompt}] + conversation) if system_prompt else conversation
   reqBody = {
     "model": model,
-    "messages": conversation,
+    "messages": messages,
     "stream": True
   }
   response = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=reqBody, stream=True)

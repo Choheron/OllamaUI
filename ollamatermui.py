@@ -6,6 +6,7 @@ from textual import work
 from utils.ollama_utils import get_installed_models, OLLAMA_BASE_URL
 from components.chat_box import ChatBox
 from components.server_info_modal import ServerInfoModal
+from components.settings_modal import SettingsModal
 
 
 class OllamaTermUI(App):
@@ -17,14 +18,16 @@ class OllamaTermUI(App):
     "tcss/confirm_clear_modal.tcss",
     "tcss/ollamaui.tcss",
     "tcss/server_info_modal.tcss",
+    "tcss/settings_modal.tcss",
   ]
 
 
   def compose(self) -> ComposeResult:
     yield Header()
     with Horizontal(id="statusBar"):
-      yield Select([("Loading...", 1)], id="modelSelect", prompt="Loading models...", allow_blank=False)
+      yield Button("\u2699", id="button_settings")
       yield Button("\u2139", id="button_serverInfo")
+      yield Select([("Loading...", 1)], id="modelSelect", prompt="Loading models...", allow_blank=False)
     with Horizontal():
       with Vertical(id="sidebar"):
         yield Label("Conversations:")
@@ -47,6 +50,7 @@ class OllamaTermUI(App):
     self.chatContainer = self.query_one("#chatContainer")
     self.chatContainer.styles.width = "10fr"
     self.carryOver: bool = True
+    self.system_prompt: str = ""
     self.query_one("#statusBar").border_title = "Current Model:"
     self.load_models()
 
@@ -124,7 +128,12 @@ class OllamaTermUI(App):
 
 
   def on_button_pressed(self, event: Button.Pressed) -> None:
-    if event.button.id == "button_serverInfo":
+    if event.button.id == "button_settings":
+      def handle_settings(result: str | None):
+        if result is not None:
+          self.system_prompt = result
+      self.push_screen(SettingsModal(self.system_prompt), handle_settings)
+    elif event.button.id == "button_serverInfo":
       active_model = None
       if self.active_convo_id is not None:
         convo = self._get_conversation(self.active_convo_id)

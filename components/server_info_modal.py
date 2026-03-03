@@ -2,9 +2,29 @@ import requests
 
 from textual.screen import ModalScreen
 from textual.app import ComposeResult
-from textual.widgets import Label, Button, Rule, DataTable
-from textual.containers import Vertical
+from textual.widgets import Label, Button, Rule, DataTable, Select
+from textual.containers import Vertical, Horizontal
 from textual import work
+
+from utils.ollama_utils import delete_model
+
+
+class ConfirmDeleteModal(ModalScreen):
+
+  def __init__(self, model_name: str):
+    super().__init__()
+    self.model_name = model_name
+
+  def compose(self) -> ComposeResult:
+    with Vertical(id="confirmDeleteDialog"):
+      yield Label(f'Delete "{self.model_name}"?')
+      yield Label("This will remove it from the server.", classes="confirmDeleteHint")
+      with Horizontal(id="confirmDeleteButtons"):
+        yield Button("Yes, Delete", id="button_confirmDelete", variant="error")
+        yield Button("Cancel", id="button_cancelDelete")
+
+  def on_button_pressed(self, event: Button.Pressed) -> None:
+    self.dismiss(event.button.id == "button_confirmDelete")
 
 
 class ServerInfoModal(ModalScreen):
@@ -36,10 +56,14 @@ class ServerInfoModal(ModalScreen):
         yield Label("  No active model")
       yield Rule()
       yield Label("Installed Models", classes="sectionHeader")
-      yield DataTable(id="modelsTable", show_cursor=False)
+      yield DataTable(id="modelsTable", cursor_type="row")
+      yield Label("", id="deleteStatusLabel")
+      yield Button("Delete Model", id="button_deleteModel", variant="error", disabled=True)
+      yield Rule()
       yield Button("Close", id="button_closeServerInfo")
 
   def on_mount(self) -> None:
+    self._selected_model_name: str | None = None
     table = self.query_one("#modelsTable", DataTable)
     table.add_columns("Name", "Parameters", "Size")
     for m in self.installed_models:
@@ -47,9 +71,14 @@ class ServerInfoModal(ModalScreen):
       table.add_row(
         m.get('name', 'N/A'),
         m.get('details', {}).get('parameter_size', 'N/A'),
-        f"{size_gb:.2f} GB"
+        f"{size_gb:.2f} GB",
+        key=m.get('name')
       )
     self._check_server_status()
+
+  def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+    self._selected_model_name = event.row_key.value
+    self.query_one("#button_deleteModel", Button).disabled = False
 
   @work(thread=True)
   def _check_server_status(self) -> None:
@@ -67,3 +96,33 @@ class ServerInfoModal(ModalScreen):
   def on_button_pressed(self, event: Button.Pressed) -> None:
     if event.button.id == "button_closeServerInfo":
       self.dismiss()
+    elif event.button.id == "button_deleteModel" and self._selected_model_name:
+      model_name = self._selected_model_name
+      def handle_confirm(confirmed: bool):
+        if confirmed:
+          self._do_delete(model_name)
+      self.app.push_screen(ConfirmDeleteModal(model_name), handle_confirm)
+
+  @work(thread=True)
+  def _do_delete(self, model_name: str) -> None:
+    success = delete_model(model_name)
+    self.app.call_from_thread(self._on_delete_result, model_name, success)
+
+  def _on_delete_result(self, model_name: str, success: bool) -> None:
+    status_label = self.query_one("#deleteStatusLabel", Label)
+    if success:
+      self.query_one("#modelsTable", DataTable).remove_row(model_name)
+      self.installed_models = [m for m in self.installed_models if m['name'] != model_name]
+      self.app.installed_models = [m for m in self.app.installed_models if m['name'] != model_name]
+      self.app.query_one("#modelSelect", Select).set_options([
+        (
+          f"{m['name']} - {m['details']['parameter_size']} Params - {m['size'] / (1024**3):.2f}GB",
+          m['name']
+        )
+        for m in self.app.installed_models
+      ])
+      status_label.update(f'"{model_name}" deleted.')
+      self._selected_model_name = None
+      self.query_one("#button_deleteModel", Button).disabled = True
+    else:
+      status_label.update("Error: deletion failed.")
