@@ -29,6 +29,11 @@ SettingsModal {
   height: 8;
 }
 
+#connectionStatus {
+  color: $error;
+  height: auto;
+}
+
 #settingsButtons {
   width: 1fr;
   height: auto;

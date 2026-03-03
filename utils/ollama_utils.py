@@ -3,6 +3,15 @@ import json
 
 OLLAMA_BASE_URL = "http://192.168.1.200:11434"
 
+def check_connection(url: str) -> bool:
+  """Test whether the Ollama server at the given URL is reachable."""
+  try:
+    response = requests.get(f"{url}/api/version", timeout=5)
+    return response.ok
+  except Exception:
+    return False
+
+
 def get_installed_models():
   # Query server for models
   response = requests.get(f"{OLLAMA_BASE_URL}/api/tags")

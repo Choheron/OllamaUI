@@ -4,7 +4,7 @@ from textual.containers import Horizontal, Vertical
 from textual import work
 
 import utils.ollama_utils as ollama_utils_module
-from utils.ollama_utils import get_installed_models, OLLAMA_BASE_URL
+from utils.ollama_utils import get_installed_models
 from utils.config import load_config, save_config
 from components.chat_box import ChatBox
 from components.server_info_modal import ServerInfoModal
@@ -69,23 +69,53 @@ class OllamaTermUI(App):
     self.app.call_from_thread(self._setup_after_models_load, models)
 
 
-  def _setup_after_models_load(self, models: list[dict]):
+  @work(thread=True)
+  def reload_models(self):
+    try:
+      models = get_installed_models()
+      self.app.call_from_thread(self._on_reload_models_done, models, None)
+    except Exception as e:
+      self.app.call_from_thread(self._on_reload_models_done, [], str(e))
+
+
+  def _apply_models(self, models: list[dict]):
+    """Update self.installed_models and the Select widget. Preserves current selection if possible."""
     self.installed_models = models
     select = self.query_one("#modelSelect", Select)
+    try:
+      current_value = select.value if select.value is not Select.BLANK else None
+    except Exception:
+      current_value = None
     select.set_options([
       (
         f"{m['name']} - {m['details']['parameter_size']} Params - {m['size'] / (1024**3):.2f}GB",
-        f"{m['name']}"
+        m['name']
       )
       for m in models
     ])
-    select.prompt = "Select a model..."
+    if current_value and any(m['name'] == current_value for m in models):
+      select.value = current_value
+    elif models:
+      select.value = models[0]['name']
+
+
+  def _setup_after_models_load(self, models: list[dict]):
+    self._apply_models(models)
+    self.query_one("#modelSelect", Select).prompt = "Select a model..."
     self.query_one("#loadingLabel").remove()
     self.query_one("#button_newConvo", Button).disabled = False
     self.query_one("#button_convoPersist", Button).disabled = False
     self._update_summarize_button()
     if models:
       self._new_conversation(models[0])
+
+
+  def _on_reload_models_done(self, models: list[dict], error: str | None):
+    if error:
+      self.notify(f"Could not load models: {error}", severity="error")
+      return
+    self._apply_models(models)
+    self._update_summarize_button()
 
 
   def _new_conversation(self, model: dict):
@@ -156,7 +186,8 @@ class OllamaTermUI(App):
         if result is not None:
           self.system_prompt = result["system_prompt"]
           ollama_utils_module.OLLAMA_BASE_URL = result["url"]
-          save_config(result)
+          save_config({"ollama_url": result["url"], "system_prompt": result["system_prompt"]})
+          self.reload_models()
       self.push_screen(SettingsModal(self.system_prompt, ollama_utils_module.OLLAMA_BASE_URL), handle_settings)
     elif event.button.id == "button_serverInfo":
       active_model = None
@@ -164,7 +195,7 @@ class OllamaTermUI(App):
         convo = self._get_conversation(self.active_convo_id)
         if convo:
           active_model = convo['model']
-      self.push_screen(ServerInfoModal(OLLAMA_BASE_URL, self.installed_models, active_model))
+      self.push_screen(ServerInfoModal(ollama_utils_module.OLLAMA_BASE_URL, self.installed_models, active_model))
     elif event.button.id == "button_convoPersist":
       self.carryOver = not self.carryOver
       btn = self.query_one("#button_convoPersist", Button)
