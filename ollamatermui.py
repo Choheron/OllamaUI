@@ -105,8 +105,23 @@ class OllamaTermUI(App):
 
   @work(thread=True)
   def load_models(self):
-    models = get_installed_models()
-    self.app.call_from_thread(self._setup_after_models_load, models)
+    active = next((s for s in self.servers if s["name"] == self.active_server_name), None)
+    others = [s for s in self.servers if s["name"] != self.active_server_name]
+    candidates = ([active] if active else []) + others
+
+    for server in candidates:
+      ollama_utils_module.OLLAMA_BASE_URL = server["url"]
+      try:
+        models = get_installed_models()
+      except Exception:
+        continue
+
+      if server["name"] != self.active_server_name:
+        self.app.call_from_thread(self._apply_fallback_server, server["name"])
+      self.app.call_from_thread(self._setup_after_models_load, models)
+      return
+
+    self.app.call_from_thread(self._on_all_servers_failed)
 
 
   @work(thread=True)
@@ -139,7 +154,7 @@ class OllamaTermUI(App):
       select.value = models[0]['name']
 
 
-  def _setup_after_models_load(self, models: list[dict]):
+  async def _setup_after_models_load(self, models: list[dict]):
     self._apply_models(models)
     self.query_one("#modelSelect", Select).prompt = "Select a model..."
     self.query_one("#loadingLabel").remove()
@@ -147,7 +162,7 @@ class OllamaTermUI(App):
     self.query_one("#button_convoPersist", Button).disabled = False
     self._update_summarize_button()
     self._load_conversations_for_server()
-    self._rebuild_sidebar_from_conversations()
+    await self._rebuild_sidebar_from_conversations()
     if self.conversations:
       self.call_after_refresh(self._switch_conversation, self.conversations[-1]['id'])
     elif models:
@@ -160,6 +175,33 @@ class OllamaTermUI(App):
       return
     self._apply_models(models)
     self._update_summarize_button()
+    if self.active_convo_id is not None:
+      self.call_after_refresh(self._switch_conversation, self.active_convo_id)
+
+
+  def _apply_fallback_server(self, name: str) -> None:
+    self.active_server_name = name
+    server = next((s for s in self.servers if s["name"] == name), None)
+    self.system_prompt = server.get("system_prompt", "") if server else ""
+    self.notify(f'Primary server unreachable. Fell back to "{name}".', severity="warning", timeout=8)
+
+  def _on_all_servers_failed(self) -> None:
+    try:
+      self.query_one("#loadingLabel", Label).update("No models available — all servers unreachable.")
+    except Exception:
+      pass
+    self.notify(
+      "Could not connect to any Ollama server. Open Settings to configure a server.",
+      severity="error",
+      timeout=10,
+    )
+
+  def _on_connection_failed(self, _error: str):
+    try:
+      self.query_one("#loadingLabel", Label).update("Could not connect to server.")
+    except Exception:
+      pass
+    self.notify("Could not connect to Ollama server: check your server settings.", severity="error", timeout=8)
 
 
   def _load_conversations_for_server(self):
@@ -174,11 +216,11 @@ class OllamaTermUI(App):
       self.next_convo_num = 1
 
 
-  def _rebuild_sidebar_from_conversations(self):
+  async def _rebuild_sidebar_from_conversations(self):
     list_view = self.query_one("#convoListView", ListView)
-    list_view.clear()
+    await list_view.query("ListItem").remove()
     for convo in self.conversations:
-      list_view.append(
+      await list_view.mount(
         ListItem(
           Label(f"{convo['title']} - {convo['model']['name']}"),
           id=f"convo_{convo['id']}"
@@ -256,7 +298,7 @@ class OllamaTermUI(App):
       if convo and convo.get('messages'):
         self.push_screen(SummaryModal(convo['model']['name'], convo['messages']))
     elif event.button.id == "button_settings":
-      def handle_settings(result: dict | None):
+      async def handle_settings(result: dict | None):
         if result is not None:
           prev_url = ollama_utils_module.OLLAMA_BASE_URL
           prev_server = self.active_server_name
@@ -276,7 +318,7 @@ class OllamaTermUI(App):
           if self.active_server_name != prev_server:
             self.active_convo_id = None
             self._load_conversations_for_server()
-            self._rebuild_sidebar_from_conversations()
+            await self._rebuild_sidebar_from_conversations()
             if self.conversations:
               self.call_after_refresh(self._switch_conversation, self.conversations[-1]['id'])
             elif self.installed_models:

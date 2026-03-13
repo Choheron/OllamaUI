@@ -1,3 +1,6 @@
+import base64
+import os
+
 from textual.widget import Widget
 from textual.widgets import Label, TextArea, Button, Markdown
 from textual.containers import Vertical, Horizontal
@@ -61,6 +64,7 @@ class ChatBox(Widget):
     self.conversation = conversation if (conversation is not None) else []
     self.model = model
     self.readonly = readonly
+    self._pending_attachment: dict | None = None
 
 
   def compose(self):
@@ -72,7 +76,9 @@ class ChatBox(Widget):
         else:
           for msg in self.conversation:
             if msg['role'] == 'user':
-              yield Label(msg['content'], classes="userMessage")
+              if msg.get('_attachment_name'):
+                yield Label(f"📎 {msg['_attachment_name']}", classes="attachmentTag")
+              yield Label(msg['content'] or "(image only)", classes="userMessage")
             elif msg['role'] == 'assistant':
               md = Markdown(msg['content'], classes="modelMessage")
               model_label = msg.get('model', '')
@@ -81,9 +87,13 @@ class ChatBox(Widget):
       if self.readonly:
         yield Label("[yellow]Warning: model not installed — conversation is read-only.[/yellow]", classes="systemMessage")
       else:
+        with Horizontal(id="attachmentRow"):
+          yield Label("", id="attachLabel")
+          yield Button("✕", id="button_clearAttachment")
         with Horizontal(id="inputTray"):
           yield SendableTextArea(id="userInput")
           yield Button("Send", id="button_sendMessage")
+          yield Button("📎", id="button_attach")
           yield Button("Rename", id="button_renameConvo")
           yield Button("Delete Conversation", id="button_deleteConvo", variant="error")
 
@@ -103,6 +113,8 @@ class ChatBox(Widget):
     # Send Button
     self.sendButton: Button = self.query_one("#button_sendMessage")
     self.sendButton.disabled = True
+    # Hide attachment row initially
+    self._update_attachment_ui()
 
 
   def _scroll_if_at_bottom(self):
@@ -110,18 +122,68 @@ class ChatBox(Widget):
       self.convoViewport.scroll_end(animate=False)
 
 
+  def _load_attachment(self, path: str) -> None:
+    filename = os.path.basename(path)
+    ext = os.path.splitext(filename)[1].lower()
+    image_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+    try:
+      if ext in image_exts:
+        with open(path, "rb") as f:
+          data = base64.b64encode(f.read()).decode()
+        self._pending_attachment = {"type": "image", "filename": filename, "data": data}
+      else:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+          content = f.read()
+        self._pending_attachment = {"type": "text", "filename": filename, "content": content}
+      self._update_attachment_ui()
+    except Exception as e:
+      self.app.notify(f"Could not read file: {e}", severity="error")
+
+
+  def _update_attachment_ui(self) -> None:
+    try:
+      row = self.query_one("#attachmentRow")
+      label = self.query_one("#attachLabel", Label)
+      if self._pending_attachment:
+        label.update(f"📎 {self._pending_attachment['filename']}")
+        row.display = True
+      else:
+        label.update("")
+        row.display = False
+    except Exception:
+      pass
+
+
   def _handle_send(self):
     userText = self.inputBox.text
-    if not userText:
+    attachment = self._pending_attachment
+    if not userText and not attachment:
       return
     if len(self.conversation) <= 1:
-      new_title = userText if len(userText) < 10 else f"{userText[:10]}..."
+      title_text = userText or (attachment['filename'] if attachment else "")
+      new_title = title_text if len(title_text) < 10 else f"{title_text[:10]}..."
       self.post_message(ChatBox.UpdateConversationTitle(new_title))
-    self.convoViewport.mount(Label(userText, classes="userMessage"))
+
+    self._pending_attachment = None
+    self._update_attachment_ui()
+
+    if attachment and attachment["type"] == "image":
+      if attachment['filename']:
+        self.convoViewport.mount(Label(f"📎 {attachment['filename']}", classes="attachmentTag"))
+      self.convoViewport.mount(Label(userText or "(image only)", classes="userMessage"))
+      msg = {"role": "user", "content": userText, "images": [attachment["data"]], "_attachment_name": attachment["filename"]}
+    elif attachment and attachment["type"] == "text":
+      injected = f"File: {attachment['filename']}\n```\n{attachment['content']}\n```\n\n{userText}"
+      self.convoViewport.mount(Label(injected, classes="userMessage"))
+      msg = {"role": "user", "content": injected}
+    else:
+      self.convoViewport.mount(Label(userText, classes="userMessage"))
+      msg = {"role": "user", "content": userText}
+
     self.convoViewport.scroll_end(animate=True)
     self.inputBox.clear()
     self.sendButton.disabled = True
-    self.get_model_response(userText)
+    self.get_model_response(msg)
 
 
   def on_sendable_text_area_submit(self, _: SendableTextArea.Submit) -> None:
@@ -130,11 +192,20 @@ class ChatBox(Widget):
 
 
   async def on_button_pressed(self, event: Button.Pressed) -> None:
-    if(event.button.id == "button_sendMessage"):
+    if event.button.id == "button_sendMessage":
       self._handle_send()
-    elif(event.button.id == "button_renameConvo"):
+    elif event.button.id == "button_attach":
+      from textual_fspicker import FileOpen
+      def handle_picked(path):
+        if path:
+          self._load_attachment(str(path))
+      self.app.push_screen(FileOpen(), handle_picked)
+    elif event.button.id == "button_clearAttachment":
+      self._pending_attachment = None
+      self._update_attachment_ui()
+    elif event.button.id == "button_renameConvo":
       self.post_message(ChatBox.RenameConversationRequested())
-    elif(event.button.id == "button_deleteConvo"):
+    elif event.button.id == "button_deleteConvo":
       def handle_confirm(confirmed: bool):
         if confirmed:
           self.post_message(ChatBox.DeleteConversationRequested())
@@ -143,22 +214,19 @@ class ChatBox(Widget):
 
   async def on_text_area_changed(self, event: TextArea.Changed) -> None:
     # If the text area is empty, disable the input, else enable
-    if(event.text_area.id == "userInput"):
-      if(event.text_area.text == ""):
+    if event.text_area.id == "userInput":
+      if event.text_area.text == "" and not self._pending_attachment:
         self.sendButton.disabled = True
       else:
         self.sendButton.disabled = False
 
 
   @work(exclusive=True, thread=True)
-  def get_model_response(self, userText):
+  def get_model_response(self, msg: dict):
     start_ts = datetime.now()
     response_widget = None
     try:
-      self.conversation.append({
-        "role": "user",
-        "content": userText
-      })
+      self.conversation.append(msg)
       self.app.call_from_thread(self.post_message, ChatBox.ConversationSaveRequested())
       response_widget = Markdown("", classes="modelMessage")
       response_widget.border_title = "Thinking..."
@@ -191,4 +259,3 @@ class ChatBox(Widget):
       self.app.call_from_thread(setattr, self.sendButton, "disabled", False)
       self.app.call_from_thread(self.inputBox.focus)
       self.app.call_from_thread(self.convoViewport.scroll_end, animate=True)
-

@@ -14,7 +14,7 @@ def check_connection(url: str) -> bool:
 
 def get_installed_models():
   # Query server for models
-  response = requests.get(f"{OLLAMA_BASE_URL}/api/tags")
+  response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=10)
   modelList = response.json()['models']
   return modelList
 

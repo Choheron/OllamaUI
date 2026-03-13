@@ -23,7 +23,7 @@ SettingsModal {
 }
 
 #serversTable {
-  height: 6;
+  height: 8;
   margin-bottom: 1;
 }
 

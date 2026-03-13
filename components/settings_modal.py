@@ -14,6 +14,7 @@ class SettingsModal(ModalScreen):
     self._servers: list[dict] = [dict(s) for s in servers]
     self._active_name: str = active_server_name
     self._selected_name: str | None = None
+    self._server_statuses: dict[str, str] = {}
 
   def compose(self) -> ComposeResult:
     with Vertical(id="settingsDialog"):
@@ -51,16 +52,45 @@ class SettingsModal(ModalScreen):
 
   def on_mount(self) -> None:
     table = self.query_one("#serversTable", DataTable)
-    table.add_columns("Active", "Name", "URL")
+    table.add_column("Active", key="active")
+    table.add_column("Name", key="name")
+    table.add_column("URL", key="url")
+    table.add_column("Status", key="status")
     self._rebuild_table()
+    self._check_all_server_statuses()
 
   def _rebuild_table(self) -> None:
     table = self.query_one("#serversTable", DataTable)
     table.clear()
     for server in self._servers:
       active_mark = "●" if server["name"] == self._active_name else ""
-      table.add_row(active_mark, server["name"], server["url"], key=server["name"])
+      status = self._server_statuses.get(server["name"], "Checking...")
+      table.add_row(active_mark, server["name"], server["url"], status, key=server["name"])
     self._update_delete_button()
+
+  def _check_all_server_statuses(self) -> None:
+    for server in self._servers:
+      self._check_single_server_status(server["name"], server["url"])
+
+  @work(thread=True)
+  def _check_single_server_status(self, name: str, url: str) -> None:
+    online = check_connection(url)
+    status_text = "✓ Online" if online else "✗ Offline"
+    self.app.call_from_thread(self._update_server_status_cell, name, status_text)
+
+  def _update_server_status_cell(self, name: str, status_text: str) -> None:
+    self._server_statuses[name] = status_text
+    try:
+      table = self.query_one("#serversTable", DataTable)
+      table.update_cell(row_key=name, column_key="status", value=status_text)
+    except Exception:
+      pass  # row deleted before check completed
+    if name == self._selected_name:
+      self._update_set_active_button()
+
+  def _update_set_active_button(self) -> None:
+    online = self._server_statuses.get(self._selected_name) == "✓ Online"
+    self.query_one("#button_setActiveServer", Button).disabled = self._selected_name is None or not online
 
   def _update_delete_button(self) -> None:
     btn = self.query_one("#button_deleteServer", Button)
@@ -68,7 +98,7 @@ class SettingsModal(ModalScreen):
 
   def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
     self._selected_name = event.row_key.value if event.row_key else None
-    self.query_one("#button_setActiveServer", Button).disabled = self._selected_name is None
+    self._update_set_active_button()
     self._update_delete_button()
 
   def on_button_pressed(self, event: Button.Pressed) -> None:

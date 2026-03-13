@@ -1,3 +1,4 @@
 textual
 textual-dev
+textual-fspicker
 requests

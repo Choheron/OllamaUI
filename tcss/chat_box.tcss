@@ -2,11 +2,13 @@
   dock: bottom;
   height: auto;
   max_height: 10;
+  padding: 0;
 }
 
 #userInput {
   height: auto;
   max_height: 10;
+  margin: 0;
 }
 
 #convoViewport {
@@ -44,4 +46,29 @@
 .modelMessage MarkdownParagraph {
   margin-bottom: 0;
   margin-top: 0;
+}
+
+#attachmentRow {
+  height: auto;
+  display: none;
+  padding: 0 1;
+}
+
+.attachmentTag {
+  color: $accent;
+  padding: 0 2;
+}
+
+#button_attach {
+  background: $surface;
+  color: $accent;
+  border: tall $accent;
+  min-width: 5;
+  padding: 0 0;
+  margin: 0;
+}
+
+#button_attach:hover {
+  background: $accent;
+  color: $background;
 }
