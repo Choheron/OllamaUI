@@ -43,6 +43,9 @@ class ChatBox(Widget):
   class DeleteConversationRequested(Message):
     pass
 
+  class RenameConversationRequested(Message):
+    pass
+
   class UpdateConversationTitle(Message):
     """Update title of current conversation"""
     def __init__(self, title: str) -> None:
@@ -71,13 +74,17 @@ class ChatBox(Widget):
             if msg['role'] == 'user':
               yield Label(msg['content'], classes="userMessage")
             elif msg['role'] == 'assistant':
-              yield Markdown(msg['content'], classes="modelMessage")
+              md = Markdown(msg['content'], classes="modelMessage")
+              model_label = msg.get('model', '')
+              md.border_title = f"{model_label} Responded" if model_label else ""
+              yield md
       if self.readonly:
         yield Label("[yellow]Warning: model not installed — conversation is read-only.[/yellow]", classes="systemMessage")
       else:
         with Horizontal(id="inputTray"):
           yield SendableTextArea(id="userInput")
           yield Button("Send", id="button_sendMessage")
+          yield Button("Rename", id="button_renameConvo")
           yield Button("Delete Conversation", id="button_deleteConvo", variant="error")
 
 
@@ -125,6 +132,8 @@ class ChatBox(Widget):
   async def on_button_pressed(self, event: Button.Pressed) -> None:
     if(event.button.id == "button_sendMessage"):
       self._handle_send()
+    elif(event.button.id == "button_renameConvo"):
+      self.post_message(ChatBox.RenameConversationRequested())
     elif(event.button.id == "button_deleteConvo"):
       def handle_confirm(confirmed: bool):
         if confirmed:
@@ -161,7 +170,7 @@ class ChatBox(Widget):
           accumulated += chunk["message"]["content"]
           self.app.call_from_thread(response_widget.update, accumulated)
           self.app.call_from_thread(self._scroll_if_at_bottom)
-      self.conversation.append({"role": "assistant", "content": accumulated})
+      self.conversation.append({"role": "assistant", "content": accumulated, "model": self.model['name']})
       self.app.call_from_thread(self.post_message, ChatBox.ConversationSaveRequested())
     except Exception as e:
       if response_widget is not None:
@@ -177,7 +186,7 @@ class ChatBox(Widget):
       if response_widget is not None:
         self.app.call_from_thread(
           setattr, response_widget, 'border_title',
-          f"Thought for {thinking_time.seconds}s"
+          f"{self.model['name']} • Thought for {thinking_time.seconds}s"
         )
       self.app.call_from_thread(setattr, self.sendButton, "disabled", False)
       self.app.call_from_thread(self.inputBox.focus)

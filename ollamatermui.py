@@ -1,5 +1,6 @@
 from textual.app import App, ComposeResult
-from textual.widgets import Footer, Header, Label, Button, Select, ListView, ListItem
+from textual.screen import ModalScreen
+from textual.widgets import Footer, Header, Label, Button, Select, ListView, ListItem, Input
 from textual.containers import Horizontal, Vertical
 from textual import work
 
@@ -11,6 +12,38 @@ from components.chat_box import ChatBox
 from components.server_info_modal import ServerInfoModal
 from components.settings_modal import SettingsModal
 from components.summary_modal import SummaryModal
+
+
+class RenameConversationModal(ModalScreen):
+
+  def __init__(self, current_title: str) -> None:
+    super().__init__()
+    self.current_title = current_title
+
+  def compose(self):
+    with Vertical(id="confirmDialog"):
+      yield Label("Rename conversation:")
+      yield Input(value=self.current_title, id="renameInput")
+      with Horizontal(id="confirmButtons"):
+        yield Button("Rename", id="button_confirmRename", variant="primary")
+        yield Button("Cancel", id="button_cancelRename")
+
+  def on_mount(self):
+    self.query_one("#renameInput", Input).focus()
+
+  def on_button_pressed(self, event: Button.Pressed):
+    if event.button.id == "button_confirmRename":
+      new_name = self.query_one("#renameInput", Input).value.strip()
+      self.dismiss(new_name if new_name else None)
+    else:
+      self.dismiss(None)
+
+  def on_key(self, event):
+    if event.key == "enter":
+      new_name = self.query_one("#renameInput", Input).value.strip()
+      self.dismiss(new_name if new_name else None)
+    elif event.key == "escape":
+      self.dismiss(None)
 
 
 class OllamaTermUI(App):
@@ -312,6 +345,16 @@ class OllamaTermUI(App):
     label = item.query_one(Label)
     label.update(f"{convo['title']} - {convo['model']['name']}")
 
+
+  def on_chat_box_rename_conversation_requested(self, _: ChatBox.RenameConversationRequested) -> None:
+    convo = self._get_conversation(self.active_convo_id)
+    if convo:
+      def handle_rename(new_name: str | None):
+        if new_name:
+          convo['title'] = new_name
+          self._refresh_convo_title(convo)
+          save_conversation(convo, self.active_server_name)
+      self.push_screen(RenameConversationModal(convo['title']), handle_rename)
 
   async def on_chat_box_delete_conversation_requested(self, _: ChatBox.DeleteConversationRequested) -> None:
     await self._delete_active_conversation()
