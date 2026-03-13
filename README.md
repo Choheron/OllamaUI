@@ -20,6 +20,7 @@ A terminal-based chat interface for [Ollama](https://ollama.com), built with [Te
 - **Server info & model management** — View server status, connection health, and active model details; browse all installed models and delete them directly from the UI
 - **Conversation summary** — Generate an AI summary of any conversation using the currently selected model
 - **Persistent config** — Server list, active server, and system prompts are saved to `~/.ollamatermui/config.json` and restored on launch
+- **Persistent conversations** — All conversations are automatically saved to `~/.ollamatermui/conversations/` and restored on launch, scoped per server; conversations whose model is no longer installed reopen as read-only
 
 ---
 
@@ -61,8 +62,9 @@ On first launch the app defaults to `http://localhost:11434`. Open the **Setting
 ### Managing Conversations
 
 - **New Conversation** — Opens a new chat with the currently selected model
-- **Conversation list** — Click an entry in the sidebar to switch to it
+- **Conversation list** — Click an entry in the sidebar to switch to it; conversations are restored automatically on every launch
 - **Delete Conversation** — Click the red **Delete Conversation** button inside the chat area (confirmation required)
+- **Read-only conversations** — If a conversation's model has been uninstalled, it reopens in read-only mode with a warning; the history is still viewable and can be summarized
 
 ### Model Switching
 
@@ -88,7 +90,7 @@ Click the gear icon in the top-left to open Settings.
 - Switching "Set Active" to a different server swaps the textarea to that server's prompt
 - The system prompt is injected silently at the start of every new message; it does not appear in the conversation history
 
-Settings are saved to `~/.ollamatermui/config.json` when you click **Save**.
+Settings are saved to `~/.ollamatermui/config.json` when you click **Save**. Renaming a server preserves its conversation history automatically.
 
 ### Server Info
 

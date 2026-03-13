@@ -49,11 +49,15 @@ class ChatBox(Widget):
       self.title = title
       super().__init__()
 
+  class ConversationSaveRequested(Message):
+    pass
 
-  def __init__(self, model: dict, conversation: list = None, id=None):
+
+  def __init__(self, model: dict, conversation: list = None, id=None, readonly: bool = False):
     super().__init__(id=id)
     self.conversation = conversation if (conversation is not None) else []
     self.model = model
+    self.readonly = readonly
 
 
   def compose(self):
@@ -68,25 +72,30 @@ class ChatBox(Widget):
               yield Label(msg['content'], classes="userMessage")
             elif msg['role'] == 'assistant':
               yield Markdown(msg['content'], classes="modelMessage")
-      with Horizontal(id="inputTray"):
-        yield SendableTextArea(id="userInput")
-        yield Button("Send", id="button_sendMessage")
-        yield Button("Delete Conversation", id="button_deleteConvo", variant="error")
-    
+      if self.readonly:
+        yield Label("[yellow]Warning: model not installed — conversation is read-only.[/yellow]", classes="systemMessage")
+      else:
+        with Horizontal(id="inputTray"):
+          yield SendableTextArea(id="userInput")
+          yield Button("Send", id="button_sendMessage")
+          yield Button("Delete Conversation", id="button_deleteConvo", variant="error")
+
 
   def on_mount(self):
+    # Convo Viewport
+    self.convoViewport: Vertical = self.query_one("#convoViewport")
+    if self.conversation:
+      self.convoViewport.scroll_end(animate=False)
+    if self.readonly:
+      return
     # Input Widget
     self.inputTray = self.query_one("#inputTray")
     # User Input Box
     self.inputBox: TextArea = self.query_one("#userInput")
     self.inputBox.focus()
-    # Convo Viewport
-    self.convoViewport: Vertical = self.query_one("#convoViewport")
     # Send Button
     self.sendButton: Button = self.query_one("#button_sendMessage")
     self.sendButton.disabled = True
-    if self.conversation:
-      self.convoViewport.scroll_end(animate=False)
 
 
   def _scroll_if_at_bottom(self):
@@ -141,6 +150,7 @@ class ChatBox(Widget):
         "role": "user",
         "content": userText
       })
+      self.app.call_from_thread(self.post_message, ChatBox.ConversationSaveRequested())
       response_widget = Markdown("", classes="modelMessage")
       response_widget.border_title = "Thinking..."
       self.app.call_from_thread(self.convoViewport.mount, response_widget)
@@ -152,6 +162,7 @@ class ChatBox(Widget):
           self.app.call_from_thread(response_widget.update, accumulated)
           self.app.call_from_thread(self._scroll_if_at_bottom)
       self.conversation.append({"role": "assistant", "content": accumulated})
+      self.app.call_from_thread(self.post_message, ChatBox.ConversationSaveRequested())
     except Exception as e:
       if response_widget is not None:
         self.app.call_from_thread(response_widget.remove)

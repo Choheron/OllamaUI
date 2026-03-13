@@ -6,6 +6,7 @@ from textual import work
 import utils.ollama_utils as ollama_utils_module
 from utils.ollama_utils import get_installed_models
 from utils.config import load_config, save_config
+from utils.conversational_utils import save_conversation, load_all_conversations, delete_conversation_file, rename_server_conversations
 from components.chat_box import ChatBox
 from components.server_info_modal import ServerInfoModal
 from components.settings_modal import SettingsModal
@@ -112,7 +113,11 @@ class OllamaTermUI(App):
     self.query_one("#button_newConvo", Button).disabled = False
     self.query_one("#button_convoPersist", Button).disabled = False
     self._update_summarize_button()
-    if models:
+    self._load_conversations_for_server()
+    self._rebuild_sidebar_from_conversations()
+    if self.conversations:
+      self.call_after_refresh(self._switch_conversation, self.conversations[-1]['id'])
+    elif models:
       self._new_conversation(models[0])
 
 
@@ -122,6 +127,30 @@ class OllamaTermUI(App):
       return
     self._apply_models(models)
     self._update_summarize_button()
+
+
+  def _load_conversations_for_server(self):
+    loaded = load_all_conversations(self.active_server_name)
+    self.conversations = loaded
+    if loaded:
+      max_id = max(c['id'] for c in loaded)
+      self.next_convo_id = max_id + 1
+      self.next_convo_num = max_id + 1
+    else:
+      self.next_convo_id = 1
+      self.next_convo_num = 1
+
+
+  def _rebuild_sidebar_from_conversations(self):
+    list_view = self.query_one("#convoListView", ListView)
+    list_view.clear()
+    for convo in self.conversations:
+      list_view.append(
+        ListItem(
+          Label(f"{convo['title']} - {convo['model']['name']}"),
+          id=f"convo_{convo['id']}"
+        )
+      )
 
 
   def _new_conversation(self, model: dict):
@@ -141,8 +170,14 @@ class OllamaTermUI(App):
     self._save_current_messages()
     self.active_convo_id = convo_id
     convo = self._get_conversation(convo_id)
-    self.query_one("#modelSelect", Select).value = convo['model']['name']
-    await self._remount_chatbox(convo['model'], convo['messages'])
+    model_name = convo['model']['name']
+    is_installed = any(m['name'] == model_name for m in self.installed_models)
+    if is_installed:
+      self.query_one("#modelSelect", Select).value = model_name
+      await self._remount_chatbox(convo['model'], convo['messages'], readonly=False)
+    else:
+      await self._remount_chatbox(convo['model'], convo['messages'], readonly=True)
+      self.notify(f'Model "{model_name}" is not installed — conversation is read-only.', severity="warning")
     self._update_summarize_button()
 
 
@@ -158,13 +193,13 @@ class OllamaTermUI(App):
       pass
 
 
-  async def _remount_chatbox(self, model: dict, messages: list):
+  async def _remount_chatbox(self, model: dict, messages: list, readonly: bool = False):
     container = self.query_one("#chatContainer")
     try:
       await container.query_one("#chatBox").remove()
     except Exception:
       pass
-    await container.mount(ChatBox(model=model, conversation=messages, id="chatBox"))
+    await container.mount(ChatBox(model=model, conversation=messages, id="chatBox", readonly=readonly))
 
 
   def _update_summarize_button(self) -> None:
@@ -191,6 +226,8 @@ class OllamaTermUI(App):
       def handle_settings(result: dict | None):
         if result is not None:
           prev_url = ollama_utils_module.OLLAMA_BASE_URL
+          prev_server = self.active_server_name
+          old_servers_by_url = {s['url']: s['name'] for s in self.servers}
           self.servers = result["servers"]
           self.active_server_name = result["active_server_name"]
           active = next((s for s in self.servers if s["name"] == self.active_server_name), None)
@@ -198,6 +235,19 @@ class OllamaTermUI(App):
             ollama_utils_module.OLLAMA_BASE_URL = active["url"]
             self.system_prompt = active.get("system_prompt", "")
           save_config(result)
+          # Rename conversation directories for any servers whose name changed (matched by URL)
+          for new_server in result["servers"]:
+            old_name = old_servers_by_url.get(new_server['url'])
+            if old_name and old_name != new_server['name']:
+              rename_server_conversations(old_name, new_server['name'])
+          if self.active_server_name != prev_server:
+            self.active_convo_id = None
+            self._load_conversations_for_server()
+            self._rebuild_sidebar_from_conversations()
+            if self.conversations:
+              self.call_after_refresh(self._switch_conversation, self.conversations[-1]['id'])
+            elif self.installed_models:
+              self._new_conversation(self.installed_models[0])
           if ollama_utils_module.OLLAMA_BASE_URL != prev_url:
             self.reload_models()
       self.push_screen(SettingsModal(self.servers, self.active_server_name), handle_settings)
@@ -242,6 +292,7 @@ class OllamaTermUI(App):
       self._save_current_messages()
       convo['model'] = model
       self._refresh_convo_title(convo)
+      save_conversation(convo, self.active_server_name)
       await self._remount_chatbox(model, convo['messages'])
     else:
       # Start a fresh conversation with the selected model
@@ -266,11 +317,20 @@ class OllamaTermUI(App):
     await self._delete_active_conversation()
 
 
+  def on_chat_box_conversation_save_requested(self, _: ChatBox.ConversationSaveRequested) -> None:
+    self._save_current_messages()
+    convo = self._get_conversation(self.active_convo_id)
+    if convo:
+      save_conversation(convo, self.active_server_name)
+      self._update_summarize_button()
+
+
   async def on_chat_box_update_conversation_title(self, message: ChatBox.UpdateConversationTitle) -> None:
     convo = self._get_conversation(self.active_convo_id)
     convo['title'] = message.title
     self._refresh_convo_title(convo)
     self.query_one("#button_summarizeConvo", Button).disabled = False
+    save_conversation(convo, self.active_server_name)
 
 
   async def _delete_active_conversation(self):
@@ -283,6 +343,7 @@ class OllamaTermUI(App):
     if convo_idx is None:
       return
     convo_id = self.active_convo_id
+    delete_conversation_file(self.active_server_name, convo_id)
     self.conversations.pop(convo_idx)
     await self.query_one(f"#convo_{convo_id}", ListItem).remove()
     self.active_convo_id = None
